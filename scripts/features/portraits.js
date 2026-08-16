@@ -362,6 +362,13 @@ const FRAME = {
     return Math.max(min, Math.min(max, number));
   }
 
+  function snapToDevicePixel(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    const dpr = clampNumber(globalThis.devicePixelRatio, 0.25, 8, 1);
+    return Math.round(number * dpr) / dpr;
+  }
+
   function getPortraitBreathingSettings() {
     const read = (key, fallback) => {
       try {
@@ -401,6 +408,9 @@ const FRAME = {
 
     if (!wrapper) return;
     delete wrapper.dataset.breathSignature;
+    wrapper.style.removeProperty("translate");
+    wrapper.style.removeProperty("scale");
+    // Clean up values left by versions that animated the combined transform.
     wrapper.style.removeProperty("--ginzzzu-breathe-y");
     wrapper.style.removeProperty("--ginzzzu-breathe-scale");
   }
@@ -440,15 +450,15 @@ const FRAME = {
 
     stopPortraitBreathing(wrapper);
     wrapper.dataset.breathSignature = signature;
-    wrapper.style.setProperty("--ginzzzu-breathe-y", "0px");
-    wrapper.style.setProperty("--ginzzzu-breathe-scale", "1");
+    wrapper.style.setProperty("translate", "0 0");
+    wrapper.style.setProperty("scale", "1");
 
     try {
       wrapper[PORTRAIT_BREATHING_ANIMATION_KEY] = wrapper.animate(
         [
-          { "--ginzzzu-breathe-y": "0px", "--ginzzzu-breathe-scale": "1" },
-          { "--ginzzzu-breathe-y": `${liftPx.toFixed(3)}px`, "--ginzzzu-breathe-scale": scale.toFixed(5) },
-          { "--ginzzzu-breathe-y": "0px", "--ginzzzu-breathe-scale": "1" }
+          { translate: "0 0", scale: "1" },
+          { translate: `0 ${liftPx.toFixed(3)}px`, scale: scale.toFixed(5) },
+          { translate: "0 0", scale: "1" }
         ],
         {
           duration: durationMs,
@@ -461,8 +471,8 @@ const FRAME = {
         wrapper[PORTRAIT_BREATHING_ANIMATION_KEY].pause();
       }
     } catch (e) {
-      wrapper.style.setProperty("--ginzzzu-breathe-y", "0px");
-      wrapper.style.setProperty("--ginzzzu-breathe-scale", "1");
+      wrapper.style.removeProperty("translate");
+      wrapper.style.removeProperty("scale");
     }
   }
 
@@ -518,8 +528,6 @@ const FRAME = {
       gap: "24px",
       paddingBottom: `${getBottomOffsetPx()}px`,  // ← берём из настройки
       // paddingLeft/Right будут синхронизироваться ниже с учётом #sidebar
-      transform: "translateZ(0)", // Force GPU layer
-      backfaceVisibility: "hidden"
     });
 
     const rail = document.createElement("div");
@@ -540,8 +548,6 @@ const FRAME = {
         overflowX: "hidden",              // не скроллить — будем сжимать/перекрывать
         overflowY: "hidden",
         WebkitOverflowScrolling: "auto",
-        transform: "translateZ(0)", // Force GPU layer
-        backfaceVisibility: "hidden",
         // paddingLeft/Right будут синхронизироваться ниже с учётом #sidebar
       });
     } else {
@@ -560,8 +566,6 @@ const FRAME = {
         overflowX: "hidden",              // не скроллить — будем сжимать/перекрывать
         overflowY: "hidden",
         WebkitOverflowScrolling: "auto",
-        transform: "translateZ(0)", // Force GPU layer
-        backfaceVisibility: "hidden",
         // paddingLeft/Right будут синхронизироваться ниже с учётом #sidebar
       });
     }
@@ -2527,6 +2531,7 @@ function _onPortraitClick(ev) {
 
     // Итоговая высота портрета = (настройка) * (доступная доля экрана)
     const effectivePorHeight = porHeight * usableFraction;
+    const baseHeightPx = snapToDevicePixel(effectivePorHeight * viewportH);
 
 
     // Настройки плашки имени
@@ -2580,25 +2585,23 @@ function _onPortraitClick(ev) {
         }
       }
 
-      const finalHeight = effectivePorHeight * heightMultiplier;
+      const finalHeightPx = snapToDevicePixel(baseHeightPx * heightMultiplier);
       
       // Вычисляем offset для компенсации изменения высоты портрета
-      // Базовая высота (при heightMultiplier = 1): effectivePorHeight
-      // Актуальная высота: finalHeight
-      // Разница в высоте: finalHeight - effectivePorHeight = effectivePorHeight * (heightMultiplier - 1)
+      // Базовая и актуальная высоты выровнены по физическим пикселям экрана.
       // Компенсирующий offset: только положительный (если портрет больше — панель сдвигается вниз)
-      const heightDelta = effectivePorHeight * (heightMultiplier - 1);
-      const heightOffsetVh = Math.max(0, (heightDelta * 100) / 2);  // только положительный offset вниз
+      const heightOffsetPx = snapToDevicePixel(Math.max(0, (finalHeightPx - baseHeightPx) / 2));
+      const snappedWidthPx = snapToDevicePixel(widthPx);
       
-      wrapper.style.height    = `${finalHeight * 100}vh`;
-      wrapper.style.maxHeight = `${finalHeight * 100}vh`;
-      wrapper.style.width     = `${widthPx}px`;
-      wrapper.style.maxWidth  = `${widthPx}px`;
+      wrapper.style.height    = `${finalHeightPx}px`;
+      wrapper.style.maxHeight = `${finalHeightPx}px`;
+      wrapper.style.width     = `${snappedWidthPx}px`;
+      wrapper.style.maxWidth  = `${snappedWidthPx}px`;
       wrapper.style.flex      = "0 0 auto";
       wrapper.style.marginLeft = (i === 0) ? "0px" : `${gapPx}px`;
 
       // Передаём offset в CSS-переменную для компенсации высоты
-      wrapper.style.setProperty("--portrait-height-offset-y", `${heightOffsetVh}vh`);
+      wrapper.style.setProperty("--portrait-height-offset-y", `${heightOffsetPx}px`);
       
       // Передаём настройки имени в CSS-переменные
       wrapper.style.setProperty("--threeo-portrait-name-top", `${nameV}vh`);
@@ -2665,26 +2668,19 @@ function _onPortraitClick(ev) {
 
       // Prepare transforms
       const fromTransform = baseTransform === "none"
-        ? `translate3d(${dxAdj}px, ${dy}px, 0)`
-        : `${baseTransform} translate3d(${dxAdj}px, ${dy}px, 0)`;
-      const toTransform = baseTransform === "none" 
-        ? "translate3d(0,0,0)" 
+        ? `translate(${dxAdj}px, ${dy}px)`
+        : `${baseTransform} translate(${dxAdj}px, ${dy}px)`;
+      const toTransform = baseTransform === "none"
+        ? "none"
         : baseTransform;
 
       return { el, fromTransform, toTransform };
     }).filter(Boolean);
 
-    const previousWillChange = new Map();
-
-    // Add will-change before animations
-    animations.forEach(({el}) => {
-      previousWillChange.set(el, el.style.willChange || "");
-      el.style.willChange = "transform";
-    });
-
     // Start all animations
+    const runningAnimations = [];
     animations.forEach(({el, fromTransform, toTransform}) => {
-      el.animate(
+      const animation = el.animate(
         [
           { transform: fromTransform },
           { transform: toTransform }
@@ -2692,18 +2688,16 @@ function _onPortraitClick(ev) {
         {
           duration: _ANIM.moveMs,
           easing: _ANIM.easing,
-          fill: "both",
+          fill: "none",
           composite: "replace"
         }
       );
+      runningAnimations.push(animation);
     });
 
     scheduleAfterAnimationSettles(_ANIM.moveMs, () => {
-      animations.forEach(({el}) => {
-        if (!el.isConnected) return;
-        const previous = previousWillChange.get(el);
-        if (previous) el.style.willChange = previous;
-        else el.style.removeProperty("will-change");
+      runningAnimations.forEach(animation => {
+        try { animation.cancel(); } catch (e) {}
       });
     });
   }
@@ -2853,10 +2847,6 @@ function _onPortraitClick(ev) {
         pointerEvents: "none",
         opacity: "0",
         left: "50%",
-        // transform: "translate3d(0,12px,0)",
-        backfaceVisibility: "hidden",
-        transformStyle: "preserve-3d",
-        willChange: "transform, opacity",
       });
       el.dataset.baseTransform = el.style.transform || "";
     } else {
@@ -2870,10 +2860,7 @@ function _onPortraitClick(ev) {
         transition: `opacity ${_ANIM.fadeMs}ms ${_ANIM.easing}, transform ${_ANIM.moveMs}ms ${_ANIM.easing}, filter var(--tone-filter-transition, ${_ANIM.moveMs}ms ${_ANIM.easing})`,
         pointerEvents: "none",
         opacity: "0",
-        transform: "translate3d(0,12px,0)",
-        backfaceVisibility: "hidden",
-        transformStyle: "preserve-3d",
-        willChange: "transform, opacity"
+        transform: "translate(0,12px)"
       });
     }
     // Сохраняем базовый filter, чтобы при фокусе/дефокусе можно было вернуться
@@ -2951,8 +2938,8 @@ function _onPortraitClick(ev) {
         requestAnimationFrame(() => {
           el.style.opacity = "1";
           // после окончательного положения фиксируем базовый transform
-          el.style.transform = "translate3d(0,0,0)";
-          el.dataset.baseTransform = "translate3d(0,0,0)";
+          el.style.transform = "none";
+          el.dataset.baseTransform = "none";
           _updateImgTransformForFlip(el);
         });
       };

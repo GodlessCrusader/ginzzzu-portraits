@@ -197,23 +197,16 @@
   --ginzzzu-drag-lift: 0px;
   --ginzzzu-drag-tilt: 0deg;
   --ginzzzu-drag-scale: 1;
-  --ginzzzu-breathe-y: 0px;
-  --ginzzzu-breathe-scale: 1;
   --flip-scale-x: var(--flip-scale-x, 1);
 }
 
 #ginzzzu-portrait-layer .ginzzzu-portrait-wrapper {
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  will-change: transform;
   transform:
-    translate3d(
+    translate(
       calc(var(--shakeX, 0px) + var(--ginzzzu-manual-x, 0px) + var(--ginzzzu-drag-x, 0px)),
-      calc(var(--bobY, 0px) + var(--ginzzzu-breathe-y, 0px) + var(--ginzzzu-dim-offset-y, 0px) + var(--ginzzzu-manual-y, 0px) + var(--ginzzzu-drag-y, 0px) + var(--ginzzzu-drag-lift, 0px)),
-      0
+      calc(var(--bobY, 0px) + var(--ginzzzu-dim-offset-y, 0px) + var(--ginzzzu-manual-y, 0px) + var(--ginzzzu-drag-y, 0px) + var(--ginzzzu-drag-lift, 0px))
     )
     scale(var(--pulse, 1))
-    scale(var(--ginzzzu-breathe-scale, 1))
     scale(var(--ginzzzu-manual-scale, 1))
     scale(var(--ginzzzu-drag-scale, 1))
     rotate(calc(var(--tilt, 0deg) + var(--ginzzzu-manual-tilt, 0deg) + var(--ginzzzu-drag-tilt, 0deg)))
