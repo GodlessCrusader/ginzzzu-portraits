@@ -3926,7 +3926,7 @@ Hooks.on("getHeaderControlsDocumentSheetV2", (app, buttons) => {
 });
 }
 
-Hooks.once("ready", registerGmActorUiHooks);
+Hooks.once("setup", registerGmActorUiHooks);
 
 function normalizePortraitSequence(sequence) {
   if (!Array.isArray(sequence)) return [];
