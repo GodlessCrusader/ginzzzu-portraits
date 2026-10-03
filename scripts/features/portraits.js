@@ -202,7 +202,15 @@ const FRAME = {
   const _ANIM = {
     get fadeMs() { return ANIM.fadeMs; },
     get moveMs() { return ANIM.moveMs; },
-    get easing()  { return ANIM.easing ?? "ease"; }
+    get easing() {
+      const easing = typeof ANIM.easing === "string" ? ANIM.easing.trim() : "";
+      // Settings can contain an empty or invalid CSS easing. Unlike CSS
+      // transitions, Element.animate throws and interrupts portrait creation.
+      return easing && CSS.supports("animation-timing-function", easing)
+        && !/^(initial|inherit|unset|revert|revert-layer)$/i.test(easing)
+        ? easing
+        : "ease-out";
+    }
   };
 
   const isGM = () => !!game.user?.isGM;
